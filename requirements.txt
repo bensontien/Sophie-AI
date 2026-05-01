@@ -1,8 +1,27 @@
-numpy==2.0.0
+# Web Framework & API Server
+fastapi
+uvicorn
+pydantic
+python-dotenv
+requests
+aiohttp
+
+# LLM Framework (LlamaIndex)
 llama-index
+llama-index-llms-openai
 llama-index-llms-openai-like
-langchain
-langchain-community
+
+# Tools & Agents Utilities
+beautifulsoup4
+duckduckgo-search
 arxiv
 pymupdf
+
+# MCP (Model Context Protocol)
+mcp
+fastmcp
+
+# Local Inference & Data
+numpy==2.0.0
 vllm
+huggingface-hub
