@@ -1,99 +1,99 @@
-# Sophie AI Assistant (Sophie 智能助理)
+# Sophie AI Assistant
 
-Sophie 是一個基於 **微服務與多代理人架構 (Microservices & Multi-Agent Architecture)** 的高彈性、企業級 AI 助理系統。它具備自主任務規劃、動態代理人生成、漸進式工具揭露 (Progressive Tool Disclosure) 等核心特性，並將 AI 邏輯 (Python Brain) 與工具執行 (MCP Muscle) 進行嚴格分離。
+Sophie is a highly flexible, enterprise-grade AI assistant system based on a Microservices & Multi-Agent Architecture. It features autonomous task planning, dynamic agent generation, and Progressive Tool Disclosure, while strictly separating AI logic (Python Brain) from tool execution (MCP Muscle).
 
-本系統採用高度解耦的架構：由 **FastAPI** 驅動的 Python 大腦、基於 **Model Context Protocol (MCP)** 的工具伺服器，以及 **Prompts-as-Code** 的設計哲學，允許透過 Markdown 檔案即時熱更新 LLM 的行為。
+The system adopts a highly decoupled architecture: a Python brain driven by FastAPI, a tool server based on the Model Context Protocol (MCP), and a Prompts-as-Code design philosophy, allowing for real-time hot updates of LLM behavior via Markdown files.
 
-## 🌟 核心特性
+## Core Features
 
-*   **雙軌任務編排 (Dual-Track Orchestration)**：利用主 LLM (透過 OpenRouter 或本地 vLLM) 對複雜需求進行任務分解。它能將標準工作流路由至「專化代理人 (Specialized Agents)」，或針對自定義長尾需求動態生成「通用代理人 (GenericAgents)」。
-*   **統一工具管理與 MCP 支持**：採用 **Model Context Protocol (MCP)** 實現工具的動態註冊與調用。`ToolManager` 支援階層式路由，代理人先選擇「技能類別」(如 `web_scraping`, `system_ops`)，再動態加載相關工具，有效節省 Context Window 並減少幻覺。
-*   **指令即代碼 (Prompts-as-Code)**：所有系統指令、代理人人格 (Personas) 與技能規則均抽離至 `.sophie/` 目錄下的 Markdown 檔案。支援熱加載、版本控制，並確保代碼邏輯的純潔。
-*   **腦肌分離架構 (Brain-Muscle Architecture)**：
-    *   **大腦 (Python Brain)**：處理 LLM 編排、任務規劃、狀態管理與 Websocket 串流。
-    *   **肌肉 (MCP Server)**：基於 `FastMCP` 實現的高效工具伺服器，處理網頁爬取、系統操作 (Windows PowerShell) 與文件下載等 I/O 密集型任務。
-*   **混合 LLM 支援**：完美支援本地 **vLLM** 推理框架與 **OpenRouter** 雲端 API，可根據任務複雜度與成本考量靈活切換。
+*   **Dual-Track Orchestration**: Utilizes a main LLM (via OpenRouter or local vLLM) to decompose complex requirements. It can route standard workflows to "Specialized Agents" or dynamically generate "Generic Agents" for custom long-tail requirements.
+*   **Unified Tool Management and MCP Support**: Uses the Model Context Protocol (MCP) for dynamic registration and invocation of tools. The ToolManager supports hierarchical routing, where agents first select a "Skill Category" (e.g., web_scraping, system_ops) and then dynamically load relevant tools, effectively saving context window and reducing hallucinations.
+*   **Prompts-as-Code**: All system instructions, agent personas, and skill rules are extracted into Markdown files under the .sophie/ directory. This supports hot loading, version control, and ensures the purity of code logic.
+*   **Brain-Muscle Architecture**:
+    *   **Brain (Python Brain)**: Handles LLM orchestration, task planning, state management, and WebSocket streaming.
+    *   **Muscle (MCP Server)**: A high-performance tool server implemented based on FastMCP, handling I/O intensive tasks such as web scraping, system operations (Windows PowerShell), and file downloads.
+*   **Hybrid LLM Support**: Perfectly supports both local vLLM inference frameworks and OpenRouter cloud APIs, allowing for flexible switching based on task complexity and cost considerations.
 
-## 🏗 架構與目錄結構
+## Architecture and Directory Structure
 
 ```text
 Agents/
-├── .sophie/                # 🧠 Prompts-as-Code (Markdown 設定)
-│   ├── agents/             # 編排器與各類代理人的 Persona
-│   └── skills/             # 技能清單與使用規範
+├── .sophie/                # Prompts-as-Code (Markdown configurations)
+│   ├── agents/             # Personas for orchestrator and various agents
+│   └── skills/             # Skill lists and usage specifications
 │
-├── agents/                 # 🤖 代理人實現 (LlamaIndex Workflows)
-│   ├── searchpaper_agent.py# 論文搜索代理人
-│   ├── translator_agent.py # PDF 翻譯代理人
-│   ├── news_agent.py       # 新聞分析代理人
-│   └── generic_agent.py    # 通用型任務代理人
+├── agents/                 # Agent implementations (LlamaIndex Workflows)
+│   ├── searchpaper_agent.py# Academic paper search agent
+│   ├── translator_agent.py # PDF translation agent
+│   ├── news_agent.py       # News analysis agent
+│   └── generic_agent.py    # Generic task agent
 │
-├── core/                   # ⚙️ 核心邏輯
-│   ├── orchestrator.py     # 任務分解與調度
-│   ├── tool_manager.py     # 工具適配器 (CLI, MCP)
-│   └── mcp_client.py       # MCP 伺服器客戶端
+├── core/                   # Core logic
+│   ├── orchestrator.py     # Task decomposition and scheduling
+│   ├── tool_manager.py     # Tool adapters (CLI, MCP)
+│   └── mcp_client.py       # MCP server client
 │
-├── factorys/               # 🏭 工廠模式實現
-│   ├── agent_factory.py    # 代理人生成工廠
-│   └── model_factory.py    # LLM 模型實例工廠
+├── factorys/               # Factory pattern implementations
+│   ├── agent_factory.py    # Agent generation factory
+│   └── model_factory.py    # LLM model instance factory
 │
-├── sophie-ui/              # 💻 前端界面 (React + Vite)
+├── sophie-ui/              # Frontend interface (React + Vite)
 │
-├── server.py               # 🚀 FastAPI 主程式入口
-├── tools_server.py         # 🛠 MCP 工具伺服器
-└── config.py               # ⚙️ 系統配置管理
+├── server.py               # Main FastAPI backend entry point
+├── tools_server.py         # MCP tool server
+└── config.py               # System configuration management
 ```
 
-## 🚀 快速開始
+## Quick Start
 
-### 1. 配置環境變數
-在根目錄創建 `.env` 檔案，填入您的 API 金鑰與模型配置：
+### 1. Configure Environment Variables
+Create a .env file in the root directory and fill in your API keys and model configurations:
 
 ```env
-# OpenRouter 配置
+# OpenRouter Configuration
 OPENROUTER_API_KEY=your_key
 OPENROUTER_MODEL_NAME=google/gemma-2-9b-it
 
-# 本地 vLLM 配置 (選填)
+# Local vLLM Configuration (Optional)
 DEFAULT_LOCAL_MODEL_PATH=/path/to/model
 VLLM_API_BASE=http://localhost:8000/v1
 ```
 
-### 2. 安裝依賴
+### 2. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. 啟動服務
+### 3. Start Services
 
-**步驟 A：啟動主後端服務**
-這會同時啟動 FastAPI 伺服器並自動掛載 `tools_server.py` 作為 MCP 背景進程。
+**Step A: Start the Main Backend Service**
+This starts the FastAPI server and automatically mounts tools_server.py as a background MCP process.
 ```bash
 python server.py
-# 或使用 uvicorn
+# Or use uvicorn
 # uvicorn server:app --host 0.0.0.0 --port 8080
 ```
 
-**步驟 B：啟動前端介面**
+**Step B: Start the Frontend Interface**
 ```bash
 cd sophie-ui
 npm install
 npm run dev
 ```
 
-## 🛠 開發與擴展
+## Development and Extension
 
-### 如何新增一個工具 (Tool)
-1.  在 `tools_server.py` 中使用 `@mcp.tool()` 裝飾器定義新功能。
-2.  在 `.sophie/skills/catalog.md` 中更新工具描述。
-3.  如果需要特定的安全規則，在 `.sophie/skills/` 下建立對應的 Markdown 檔案。
+### How to Add a New Tool
+1.  Define the new functionality using the @mcp.tool() decorator in tools_server.py.
+2.  Update the tool description in .sophie/skills/catalog.md.
+3.  If specific safety rules are required, create a corresponding Markdown file under .sophie/skills/.
 
-### 如何新增一個專化代理人 (Agent)
-1.  在 `agents/` 目錄下參考現有代理人 (如 `news_agent.py`) 建立新的 Workflow 類別。
-2.  在 `.sophie/agents/` 下定義該代理人的 `persona.md`。
-3.  在 `factorys/agent_factory.py` 中註冊該代理人，以便編排器調用。
+### How to Add a Specialized Agent
+1.  Create a new Workflow class in the agents/ directory, referencing existing agents (like news_agent.py).
+2.  Define the agent's persona.md under .sophie/agents/.
+3.  Register the agent in factorys/agent_factory.py so the orchestrator can call it.
 
 ---
 
-## 📄 授權
-本專案採用 MIT 授權條款。
+## License
+This project is licensed under the MIT License.
