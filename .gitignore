@@ -1,0 +1,20 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+
+# Project specific
+Papers/
+sophie-ui/node_modules/
+sophie-ui/dist/
+*.log
+
+# IDEs
+.vscode/
+.idea/

@@ -1,0 +1,8 @@
+numpy==2.0.0
+llama-index
+llama-index-llms-openai-like
+langchain
+langchain-community
+arxiv
+pymupdf
+vllm
