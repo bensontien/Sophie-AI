@@ -91,8 +91,8 @@ cd sophie-ui && npm install && cd ..
 
 ### 4. Running the System
 ```bash
-# Start the Backend (Automatically starts Ray and Tool Servers)
-python server.py
+# Start the Backend
+uvicorn server:app --host 0.0.0.0 --port 8080
 
 # In another terminal, start the UI
 cd sophie-ui
