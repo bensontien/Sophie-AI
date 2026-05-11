@@ -36,7 +36,7 @@ async def fetch_page_content(url: str, max_chars: int = 1000) -> str:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
         # Set a 10-second timeout to avoid getting stuck on dead websites
-        print(f"測試網址: {url}")
+        print(f"Testing URL: {url}")
         timeout = aiohttp.ClientTimeout(total=10)
         
         async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
@@ -90,14 +90,14 @@ def execute_windows_command(command: str) -> str:
             output = result.stdout.strip()
             if len(output) > 3000:
                 output = output[:3000] + "\n...[Output Truncated due to length]"
-            return f"✅ Command executed successfully.\nOutput:\n{output}"
+            return f"Command executed successfully.\nOutput:\n{output}"
         else:
-            return f"❌ Command failed.\nError:\n{result.stderr.strip()}"
+            return f"Command failed.\nError:\n{result.stderr.strip()}"
             
     except subprocess.TimeoutExpired:
-        return "❌ Command execution timed out (exceeded 15 seconds)."
+        return "Command execution timed out (exceeded 15 seconds)."
     except Exception as e:
-        return f"❌ Failed to execute command: {str(e)}"
+        return f"Failed to execute command: {str(e)}"
 
 if __name__ == "__main__":
     # Run the server via standard input/output (the standard MCP communication method)

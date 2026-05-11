@@ -1,15 +1,55 @@
 import os
 import json
 import inspect
+import asyncio
+import ray
 from core.state import AgentState, Plan, Task
-from agents.generic_agent import GenericAgent
 from core.prompt_loader import PromptLoader 
+from core.ray_manager import AgentActor, GenericAgentActor, ToolManagerActor, merge_states
 
 class SophieOrchestrator:
-    def __init__(self, llm, registry, tool_manager=None):
+    def __init__(self, llm, registry, tool_manager=None, tool_manager_actor=None):
         self.llm = llm
         self.registry = registry
         self.tool_manager = tool_manager
+        self.actors = {}
+        self.tool_manager_actor = tool_manager_actor
+        self._init_actors()
+
+    def _init_actors(self):
+        """Initialize Ray Actors using correct factory types and llm types"""
+        if not ray.is_initialized():
+            return
+
+        print("[Orchestrator] Initializing Ray Cluster Components...")
+        
+        # Mapping from node name (in registry) to (agent_type, llm_type)
+        node_agent_map = {
+            "SearchPaperAgent": ("SearchPaperAgent", "external"),
+            "TranslatorAgent": ("PDFTranslatorAgent", "translator"),
+            "NewsAgent": ("NewsAgent", "external"),
+            "ChatAgent": ("ChatAgent", "external"),
+        }
+
+        print("[Orchestrator] Initializing Ray Agent Actors (Lazy Init Mode)...")
+        for name, node in self.registry._nodes.items():
+            if name in node_agent_map:
+                agent_type, llm_type = node_agent_map[name]
+                self.actors[name] = AgentActor.remote(
+                    agent_type=agent_type, 
+                    llm_type=llm_type, 
+                    tool_manager_actor=self.tool_manager_actor
+                )
+            else:
+                # Handle plain functions like DownloadTool wrapper
+                from core.ray_manager import FunctionActor
+                self.actors[name] = FunctionActor.remote(name, node.executor)
+        
+        # Add a special actor for GenericAgent handling
+        self.actors["GenericAgentActor"] = GenericAgentActor.remote(
+            llm_type='external', 
+            tool_manager_actor=self.tool_manager_actor
+        )
 
     async def _generate_plan(self, user_prompt: str, memory_context: str = "") -> Plan:
         specialized_agents_desc = self.registry.get_all_descriptions()
@@ -39,7 +79,8 @@ class SophieOrchestrator:
             elif raw_text.startswith("```"):
                 raw_text = raw_text[3:-3].strip()
                 
-            plan = Plan(**json.loads(raw_text))
+            plan_data = json.loads(raw_text)
+            plan = Plan(**plan_data)
             return plan
         except Exception as e:
             print(f"Planning failed: {e}")
@@ -52,61 +93,91 @@ class SophieOrchestrator:
         
         state.plan = await self._generate_plan(user_prompt, memory_context)
         
-        print("\n=== Current Task Execution Plan ===")
+        print("\n=== Current Task Execution Plan (Ray Parallel Enabled) ===")
         for t in state.plan.tasks:
-            # Notice we now print the requested category, not the specific tools
-            category_info = f"(Category: {getattr(t, 'required_category', 'None')})" if hasattr(t, 'required_category') and getattr(t, 'required_category') else ""
-            print(f"  [{t.task_id}] {t.assigned_node} {category_info} -> {t.description}")
+            category_info = f"(Category: {getattr(t, 'required_category', 'None')})" if getattr(t, 'required_category', None) else ""
+            deps_info = f"[Depends on: {t.depends_on}]" if t.depends_on else "[Independent]"
+            print(f"  [{t.task_id}] {t.assigned_node} {category_info} {deps_info} -> {t.description}")
         print("===========================\n")
 
-        for task in state.plan.tasks:
+        # --- Ray Parallel Execution Logic ---
+        completed_task_ids = set()
+        pending_tasks = {t.task_id: t for t in state.plan.tasks}
+        running_futures = {} # {future_id: task_id}
+
+        while pending_tasks or running_futures:
             if state.is_aborted:
                 break
-                
-            print(f"\nExecuting step {task.task_id}: {task.assigned_node}")
-            state.current_phase = task.assigned_node
-            
-            if task.assigned_node == "GenericAgent":
-                if not self.tool_manager:
-                    print("Tool Manager is not initialized, skipping GenericAgent task.")
-                    continue
-                    
-                # The orchestrator now passes the requested skill category to the GenericAgent
-                req_category = getattr(task, 'required_category', None)
-                print(f"[Orchestrator] Spawning custom GenericAgent with requested skill category: {req_category}")
-                
-                try:
-                    temp_agent = GenericAgent(
-                        llm=self.llm,
-                        tool_manager=self.tool_manager,
-                        required_category=req_category, # Pass the category instead of required_tools
-                        system_prompt=task.role_prompt if task.role_prompt else "Use available tools or context to fulfill the user's request.",
-                        task_id=task.task_id
-                    )
-                    
-                    result = await temp_agent.run(state=state)
-                    state = result
-                except Exception as e:
-                    print(f"Fatal error in GenericAgent: {e}")
-                    state.is_aborted = True
-                    
-            else:
-                node = self.registry.get_node(task.assigned_node)
-                if not node:
-                    print(f"Cannot find registered tool: {task.assigned_node}, skipping.")
-                    continue
 
-                executor = node.executor
-                try:
-                    result = executor(state=state)
-                    if inspect.isawaitable(result):
-                        state = await result
+            # 1. Identify tasks whose dependencies are met and are not already running
+            to_start = []
+            for tid, task in pending_tasks.items():
+                if all(dep_id in completed_task_ids for dep_id in task.depends_on):
+                    to_start.append(tid)
+
+            # 2. Launch tasks in parallel using Ray
+            for tid in to_start:
+                task = pending_tasks.pop(tid)
+                print(f"[Orchestrator] Launching parallel task {tid}: {task.assigned_node}")
+                
+                # Execute via Ray Actor if initialized, otherwise fallback to local
+                if ray.is_initialized():
+                    if task.assigned_node == "GenericAgent":
+                        future = self.actors["GenericAgentActor"].run.remote(state, task.model_dump())
+                    elif task.assigned_node in self.actors:
+                        future = self.actors[task.assigned_node].run.remote(state)
                     else:
-                        state = result
+                        print(f"[Warning] Node {task.assigned_node} not in actors, running locally.")
+                        future = self._run_local_task(task, state)
+                else:
+                    future = self._run_local_task(task, state)
+                
+                running_futures[future] = tid
+
+            if not running_futures:
+                if pending_tasks:
+                    print(f"Warning: Deadlock detected! Pending tasks: {list(pending_tasks.keys())} but nothing running.")
+                    break
+                break
+
+            # 3. Wait for at least one task to complete
+            done_futures, _ = ray.wait(list(running_futures.keys()), num_returns=1, timeout=1.0)
+            
+            for df in done_futures:
+                tid = running_futures.pop(df)
+                try:
+                    # Get result from Ray future
+                    result_state = ray.get(df)
+                    # Merge result back to main state
+                    state = merge_states(state, result_state)
+                    completed_task_ids.add(tid)
+                    print(f"[Orchestrator] Task {tid} completed.")
                 except Exception as e:
-                    print(f"Fatal error occurred while executing node {task.assigned_node}: {e}")
+                    print(f"[Orchestrator] Task {tid} failed: {e}")
                     state.is_aborted = True
+
+            # Short sleep to prevent tight loop if no tasks are ready
+            await asyncio.sleep(0.1)
 
         state.current_phase = "finished"
         print("\n[Orchestrator] Plan execution completed!")
+        return state
+
+    async def _run_local_task(self, task, state):
+        """Fallback local execution if Ray is not available or node not wrapped"""
+        from agents.generic_agent import GenericAgent
+        if task.assigned_node == "GenericAgent":
+             temp_agent = GenericAgent(
+                llm=self.llm,
+                tool_manager=self.tool_manager,
+                required_category=task.required_category,
+                system_prompt=task.role_prompt if task.role_prompt else "Use tools.",
+                task_id=task.task_id
+            )
+             return await temp_agent.run(state=state)
+        else:
+            node = self.registry.get_node(task.assigned_node)
+            if node:
+                res = node.executor(state=state)
+                return await res if inspect.isawaitable(res) else res
         return state

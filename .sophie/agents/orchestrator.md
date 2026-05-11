@@ -27,8 +27,15 @@ Please output strictly in JSON format:
             "task_id": 1, 
             "description": "Step details", 
             "assigned_node": "AgentName",
+            "depends_on": [], 
             "required_category": "SkillCategoryName", 
             "role_prompt": "You are an expert in..."
         }}
     ]
 }}
+
+DEPENDENCY RULES:
+- Use `depends_on` to list the `task_id` of steps that MUST be completed before this one starts.
+- If two tasks do not depend on each other, they will be executed in PARALLEL via Ray.
+- The first task(s) should have an empty `depends_on` list: [].
+- Be aggressive in parallelizing tasks that don't share data (e.g., searching news and searching papers can happen at the same time).

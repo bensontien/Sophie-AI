@@ -24,11 +24,11 @@ class SophieMCPClient:
         print("[MCP Client] Successfully connected to tools_server")
 
     async def execute_tool(self, tool_name: str, **kwargs) -> str:
-        """直接呼叫遠端工具"""
+        """Call remote tool via MCP session."""
         if not self.session:
             raise RuntimeError("MCP Client is not initialized. Call start() first.")
         
-        # 過濾掉值為 None 的 kwargs，讓 MCP Server 使用預設值
+        # Filter None values to use server defaults
         clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
         result = await self.session.call_tool(tool_name, arguments=clean_kwargs)
         return result.content[0].text

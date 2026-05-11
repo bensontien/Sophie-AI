@@ -1,97 +1,150 @@
-# Sophie AI Assistant
+# Sophie AI Assistant (v2.0)
 
-Sophie is a highly flexible, enterprise-grade AI assistant system based on a Microservices & Multi-Agent Architecture. It features autonomous task planning, dynamic agent generation, and Progressive Tool Disclosure, while strictly separating AI logic (Python Brain) from tool execution (MCP Muscle).
+Sophie is a high-performance, enterprise-grade AI assistant system built on a **Microservices & Multi-Agent Architecture**. It leverages **Ray** for parallel task orchestration, **LlamaIndex** for agentic workflows, and the **Model Context Protocol (MCP)** for standardized tool execution.
 
-The system adopts a highly decoupled architecture: a Python brain driven by FastAPI, a tool server based on the Model Context Protocol (MCP), and a Prompts-as-Code design philosophy, allowing for real-time hot updates of LLM behavior via Markdown files.
-
-## Core Features
-
-*   **Dual-Track Orchestration**: Utilizes a main LLM (via OpenRouter or local vLLM) to decompose complex requirements. It can route standard workflows to "Specialized Agents" or dynamically generate "Generic Agents" for custom long-tail requirements.
-*   **Unified Tool Management and MCP Support**: Uses the Model Context Protocol (MCP) for dynamic registration and invocation of tools. The ToolManager supports hierarchical routing, where agents first select a "Skill Category" (e.g., web_scraping, system_ops) and then dynamically load relevant tools, effectively saving context window and reducing hallucinations.
-*   **Prompts-as-Code**: All system instructions, agent personas, and skill rules are extracted into Markdown files under the .sophie/ directory. This supports hot loading, version control, and ensures the purity of code logic.
-*   **Brain-Muscle Architecture**:
-    *   **Brain (Python Brain)**: Handles LLM orchestration, task planning, state management, and WebSocket streaming.
-    *   **Muscle (MCP Server)**: A high-performance tool server implemented based on FastMCP, handling I/O intensive tasks such as web scraping, system operations (Windows PowerShell), and file downloads.
-*   **Hybrid LLM Support**: Perfectly supports both local vLLM inference frameworks and OpenRouter cloud APIs, allowing for flexible switching based on task complexity and cost considerations.
-
-## Architecture and Directory Structure
-
-```text
-Agents/
-├── .sophie/                # Prompts-as-Code (Markdown configurations)
-│   ├── agents/             # Personas for orchestrator and various agents
-│   └── skills/             # Skill lists and usage specifications
-│
-├── agents/                 # Agent implementations (LlamaIndex Workflows)
-│   ├── searchpaper_agent.py# Academic paper search agent
-│   ├── translator_agent.py # PDF translation agent
-│   ├── news_agent.py       # News analysis agent
-│   └── generic_agent.py    # Generic task agent
-│
-├── core/                   # Core logic
-│   ├── orchestrator.py     # Task decomposition and scheduling
-│   ├── tool_manager.py     # Tool adapters (CLI, MCP)
-│   └── mcp_client.py       # MCP server client
-│
-├── factorys/               # Factory pattern implementations
-│   ├── agent_factory.py    # Agent generation factory
-│   └── model_factory.py    # LLM model instance factory
-│
-├── sophie-ui/              # Frontend interface (React + Vite)
-│
-├── server.py               # Main FastAPI backend entry point
-├── tools_server.py         # MCP tool server
-└── config.py               # System configuration management
-```
-
-## Quick Start
-
-### 1. Configure Environment Variables
-Create a .env file in the root directory and fill in your API keys and model configurations:
-
-```env
-# OpenRouter Configuration
-OPENROUTER_API_KEY=your_key
-OPENROUTER_MODEL_NAME=google/gemma-2-9b-it
-
-# Local vLLM Configuration (Optional)
-DEFAULT_LOCAL_MODEL_PATH=/path/to/model
-VLLM_API_BASE=http://localhost:8000/v1
-```
-
-### 2. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Start Services
-
-**Step A: Start the Main Backend Service**
-This starts the FastAPI server and automatically mounts tools_server.py as a background MCP process.
-```bash
-uvicorn server:app --host 0.0.0.0 --port 8080
-```
-
-**Step B: Start the Frontend Interface**
-```bash
-cd sophie-ui
-npm install
-npm run dev
-```
-
-## Development and Extension
-
-### How to Add a New Tool
-1.  Define the new functionality using the @mcp.tool() decorator in tools_server.py.
-2.  Update the tool description in .sophie/skills/catalog.md.
-3.  If specific safety rules are required, create a corresponding Markdown file under .sophie/skills/.
-
-### How to Add a Specialized Agent
-1.  Create a new Workflow class in the agents/ directory, referencing existing agents (like news_agent.py).
-2.  Define the agent's persona.md under .sophie/agents/.
-3.  Register the agent in factorys/agent_factory.py so the orchestrator can call it.
+The system features a clean separation between the "Brain" (LLM reasoning and planning) and the "Muscle" (Tool execution and environment interaction), following a **Prompts-as-Code** philosophy.
 
 ---
 
-## License
-This project is licensed under the MIT License.
+## 🏗 System Architecture
+
+```mermaid
+graph TD
+    User([User]) <-->|WebSocket / JSON| API[FastAPI Server]
+    
+    subgraph RayCluster [Ray Parallel Runtime]
+        API <--> Orchestrator[Sophie Orchestrator]
+        Orchestrator -->|1. Planning| Planner[LLM Planner]
+        Orchestrator -->|2. Parallel Dispatch| TaskDistributor{Task Distributor}
+        
+        TaskDistributor -->|Task A| AgentActor1[SearchPaperAgent Actor]
+        TaskDistributor -->|Task B| AgentActor2[NewsAgent Actor]
+        TaskDistributor -->|Task C| GenericActor[GenericAgent Actor]
+        
+        AgentActor1 & AgentActor2 & GenericActor <-->|Tool Request| ToolProxy[RayToolManagerProxy]
+    end
+    
+    subgraph Muscle [Tool System - The Muscle]
+        ToolProxy <--> ToolActor[ToolManagerActor]
+        ToolActor <-->|MCP Protocol| MCPServer[MCP Tool Server]
+        ToolActor <-->|Subprocess| CLI[CLI / PowerShell]
+    end
+    
+    subgraph Brain [Intelligence - The Brain]
+        Orchestrator <-->|Hot Load| Prompts[.sophie/ Markdown Prompts]
+        Orchestrator <-->|RAG / State| Memory[MemoryManager]
+        GenericActor -->|Disclosure| SkillCatalog[Skill Catalog]
+    end
+
+    style RayCluster fill:#f9f,stroke:#333,stroke-width:2px
+    style Muscle fill:#bbf,stroke:#333,stroke-width:2px
+    style Brain fill:#dfd,stroke:#333,stroke-width:2px
+```
+
+### Key Architectural Pillars
+-   **Ray-Powered Parallelism**: The orchestrator decomposes complex user queries into independent tasks that are executed concurrently across a Ray cluster, significantly reducing latency.
+-   **Dual-Track Routing**: 
+    -   **Specialized Agents**: High-efficiency workflows for specific domains (Academic Papers, News, Translation).
+    -   **Generic Agents**: Dynamic, on-the-fly agents generated for long-tail tasks using **Progressive Tool Disclosure**.
+-   **Brain-Muscle Decoupling**: AI logic (Python) is strictly isolated from tool execution (MCP Server). Tools can be written in any language supported by MCP.
+-   **Prompts-as-Code**: All system instructions and personas are stored in `.sophie/` as Markdown files, enabling version control and hot-reloading of LLM behavior without code changes.
+
+---
+
+## 🌟 Core Features
+
+-   **Autonomous Planning**: Uses a high-level LLM planner to break down complex goals into a dependency-aware execution graph.
+-   **MCP Standardized Tools**: Full support for Model Context Protocol, allowing Sophie to use any MCP-compliant tool server.
+-   **Progressive Tool Disclosure**: Instead of overloading the context with all tools, agents dynamically request "Skill Categories," keeping the context window clean and reducing hallucinations.
+-   **Hybrid LLM Engine**: Seamlessly switch between local vLLM (for privacy/cost) and OpenRouter (for state-of-the-art reasoning).
+-   **Real-time Streaming**: Full WebSocket support for interactive, low-latency communication with the frontend.
+
+---
+
+## 📁 Project Structure
+
+```text
+Agents/
+├── .sophie/                # Intelligence Layer (Markdown Prompts)
+│   ├── agents/             # Personas for Orchestrator and Specialized Agents
+│   └── skills/             # Skill catalogs and usage constraints
+│
+├── agents/                 # Implementation Layer (Workflows)
+│   ├── searchpaper_agent.py# Academic paper search (OpenAlex/Semantic Scholar)
+│   ├── news_agent.py       # Real-time news analysis & reporting
+│   ├── translator_agent.py # High-precision PDF translation workflow
+│   └── generic_agent.py    # Dynamic agent for custom tasks
+│
+├── core/                   # Kernel Layer
+│   ├── orchestrator.py     # Parallel task scheduler & Ray manager
+│   ├── ray_manager.py      # Ray Actor definitions & Proxy logic
+│   ├── tool_manager.py     # Skill category & tool registry
+│   ├── mcp_client.py       # MCP protocol implementation
+│   └── memory.py           # Context-aware conversation memory
+│
+├── factorys/               # Abstraction Layer
+│   ├── agent_factory.py    # Factory for instantiating Ray Actors/Agents
+│   └── model_factory.py    # Unified interface for LLM providers
+│
+├── sophie-ui/              # Frontend (React + Vite + Tailwind)
+│
+├── server.py               # Main API Gateway (FastAPI)
+├── tools_server.py         # MCP Tool Server (Muscle)
+└── config.py               # Environment & System configuration
+```
+
+---
+
+## 🚀 Quick Start
+
+### 1. Prerequisites
+- Python 3.10+
+- Node.js & npm (for UI)
+- Ray (installed via pip)
+
+### 2. Environment Setup
+Create a `.env` file in the root:
+```env
+# Intelligence
+OPENROUTER_API_KEY=your_key
+OPENROUTER_MODEL_NAME=google/gemma-2-9b-it
+
+# Local Muscle (vLLM)
+VLLM_API_BASE=http://localhost:8000/v1
+DEFAULT_LOCAL_MODEL_PATH=/path/to/your/model
+```
+
+### 3. Installation
+```bash
+pip install -r requirements.txt
+cd sophie-ui && npm install && cd ..
+```
+
+### 4. Running the System
+```bash
+# Start the Backend (Automatically starts Ray and Tool Servers)
+python server.py
+
+# In another terminal, start the UI
+cd sophie-ui
+npm run dev
+```
+
+---
+
+## 🛠 Extension Guide
+
+### Adding a New Skill
+1.  Add a new tool function in `tools_server.py` using `@mcp.tool()`.
+2.  Update `.sophie/skills/catalog.md` to include the new tool in a category.
+3.  The `GenericAgent` will automatically discover it during execution.
+
+### Creating a Specialized Agent
+1.  Inherit from existing agent patterns in `agents/`.
+2.  Define a new persona in `.sophie/agents/your_agent.md`.
+3.  Register the agent in `factorys/agent_factory.py` and `server.py` registry.
+
+---
+
+## 📄 License
+MIT License. Created by Ching-Yang Tien.

@@ -39,7 +39,7 @@ class NewsAgent(Workflow):
         else:
             tasks = []
             for meta in search_results_meta:
-                # Execute tool via ToolManager instead of the legacy mcp_client
+                # Execute tool via ToolManager
                 task = self.tool_manager.execute(
                     "fetch_page_content", 
                     url=meta.get('href'), 
@@ -61,9 +61,9 @@ class NewsAgent(Workflow):
                 
             context_text = "\n\n---\n\n".join(context_blocks)
 
-        print("[NewsAgent] Content scraping complete! Handing over to the LLM for trend analysis...")
+        print("[NewsAgent] Content scraping complete! Analyzing trends...")
         
-        # ✨ Dynamically load the prompt from Markdown
+        # Dynamically load the prompt from Markdown
         prompt_template = PromptLoader.load_agent_prompt("news_agent")
         prompt = prompt_template.format(
             topic=topic,

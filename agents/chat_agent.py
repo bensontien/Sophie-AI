@@ -11,12 +11,12 @@ class ChatAgent(Workflow):
     async def chat(self, ev: StartEvent) -> StopEvent:
         state: AgentState = ev.get("state")
         
-        print("[ChatAgent] 正在思考並生成回覆...")
+        print("[ChatAgent] Thinking and generating response...")
         
         prompt_template = PromptLoader.load_agent_prompt("chat_agent")
         
         prompt = prompt_template.format(
-            memory_context=state.memory_context if state.memory_context else "無",
+            memory_context=state.memory_context if state.memory_context else "None",
             user_topic=state.user_topic
         )
         
@@ -24,7 +24,7 @@ class ChatAgent(Workflow):
             response = await self.llm.acomplete(prompt)
             state.chat_reply = str(response).strip()
         except Exception as e:
-            print(f"[ChatAgent] 生成對話失敗: {e}")
+            print(f"[ChatAgent] Failed to generate response: {e}")
             state.chat_reply = "ERROR"
 
         return StopEvent(result=state)

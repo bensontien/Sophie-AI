@@ -54,8 +54,10 @@ class PDFTranslatorAgent(Workflow):
 
     @step
     async def translate_chunks(self, ev: ChunkEvent) -> StopEvent:
+        import asyncio
+        
         state = ev.state
-        print(f"[Translator] Starting sequential translation (Total {len(ev.chunks)} chunks)...")
+        print(f"[Translator] Starting parallel translation (Total {len(ev.chunks)} chunks)...")
         
         # Define output file path
         output_path = f"Papers/Translated_{ev.file_name}.md"
@@ -64,10 +66,8 @@ class PDFTranslatorAgent(Workflow):
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(f"# {ev.file_name} (Full Traditional Chinese Translation)\n\n")
 
-        # Translate chunk by chunk and write immediately
-        for i, chunk in enumerate(ev.chunks):
-            print(f"   -> Translating chunk {i+1}/{len(ev.chunks)}...")
-            
+        async def translate_single_chunk(i: int, chunk: str):
+            print(f"   Translating chunk {i+1}/{len(ev.chunks)}...")
             prompt = f"""You are a professional computer science academic translator.
             Please translate the following paper excerpt into Traditional Chinese (Taiwan academic terminology).
             
@@ -81,20 +81,25 @@ class PDFTranslatorAgent(Workflow):
 
             Please output ONLY the translated result without any additional explanations.
             """
-            
             try:
                 response = await self.llm.acomplete(prompt)
-                translated_text = str(response)
-                
-                # Append to file
-                with open(output_path, "a", encoding="utf-8") as f:
-                    f.write(f"\n\n## Section {i+1}\n\n")
-                    f.write(translated_text)
-                    
+                return i, str(response)
             except Exception as e:
                 print(f"Translation failed for chunk {i+1}: {e}")
-                with open(output_path, "a", encoding="utf-8") as f:
-                    f.write(f"\n\n[Error: Translation failed for chunk {i+1}]\n\n")
+                return i, f"\n\n[Error: Translation failed for chunk {i+1}]\n\n"
+
+        # Translate all chunks concurrently
+        tasks = [translate_single_chunk(i, chunk) for i, chunk in enumerate(ev.chunks)]
+        results = await asyncio.gather(*tasks)
+        
+        # Sort results to ensure the correct order
+        results.sort(key=lambda x: x[0])
+
+        # Write translated chunks to file in order
+        with open(output_path, "a", encoding="utf-8") as f:
+            for i, translated_text in results:
+                f.write(f"\n\n## Section {i+1}\n\n")
+                f.write(translated_text)
 
         print(f"Translation complete! File saved at: {output_path}")
         

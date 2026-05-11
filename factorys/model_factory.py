@@ -35,8 +35,8 @@ class ModelFactory:
                 is_chat_model=True,
                 timeout=config.get("timeout", 120),
                 default_headers={
-                    "HTTP-Referer": "https://your-website.com", # 替換成你的網站或專案名稱
-                    "X-Title": "My LlamaIndex App",            # 替換成你的 App 名稱
+                    "HTTP-Referer": "https://your-website.com", # Replace with your website or project name
+                    "X-Title": "My LlamaIndex App",            # Replace with your App name
                 }
             )
         

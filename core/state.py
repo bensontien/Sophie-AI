@@ -7,10 +7,13 @@ class Task(BaseModel):
     assigned_node: str     
     status: str = "pending" # pending, in_progress, completed, failed
     
-    # 用於階層式工具路由，由 Orchestrator 填入大分類 (例如 "WebScraping")
+    # Task ID dependencies for parallel scheduling (Ray DAG)
+    depends_on: List[int] = Field(default_factory=list) 
+    
+    # Used for hierarchical tool routing, filled with major category (e.g., "WebScraping")
     required_category: Optional[str] = None 
     
-    # 作為內部狀態記錄，GenericAgent 解析完分類後，可將實際調用的工具名稱寫入此處
+    # Internal status record; after GenericAgent resolves categories, actual tool names can be stored here
     required_tools: List[str] = Field(default_factory=list) 
     
     role_prompt: str = ""
@@ -42,5 +45,5 @@ class AgentState(BaseModel):
     current_phase: str = "init"
     is_aborted: bool = False
 
-    # 用於多 Agent 協作時，儲存各個 Step 的執行結果（Scratchpad 機制）
+    # Scratchpad mechanism to store execution results of each step during multi-agent collaboration
     step_results: dict[int, str] = Field(default_factory=dict)

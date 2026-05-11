@@ -8,21 +8,21 @@ from agents.chat_agent import ChatAgent
 
 class AgentFactory:
     """
-    Universal Agent Factory Class
-    Responsible for unified management of creation, dependency injection, and instance caching for all Agents
+    Universal Agent Factory.
+    Manages creation, dependency injection, and instance caching for all agents.
     """
     
     def __init__(self):
-        # Initialize all available LLMs
+        # Initialize available LLM instances
         self.local_llm = ModelFactory.create_llm(LLM_LOCAL_CONFIG)
         self.translator_llm = ModelFactory.create_llm(LLM_TRANSLATOR_CONFIG)
         self.external_llm = ModelFactory.create_llm(LLM_OPENROUTER_CONFIG)
         
-        # Read global default timeout
+        # Set global default timeout
         self.default_timeout = LLM_LOCAL_CONFIG.get("timeout", 1200)
 
     def get_llm(self, llm_type: str = 'local') -> Any:
-        """Get the LLM instance of the specified type"""
+        """Retrieve the LLM instance of the specified type."""
         if llm_type == 'local':
             return self.local_llm
         elif llm_type == 'translator':
@@ -33,14 +33,16 @@ class AgentFactory:
             raise ValueError(f"Unknown LLM type: {llm_type}")
 
     def create_agent(self, agent_type: str, llm_type: str = 'local', **kwargs) -> Any:
+        # 1. Extract tool_manager immediately to prevent leaking into Workflow kwargs
+        tool_mgr = kwargs.pop('tool_manager', None)
         
-        # 1. Dynamically retrieve the corresponding LLM instance based on the passed llm_type
+        # 2. Retrieve the corresponding LLM instance
         target_llm = self.get_llm(llm_type)
         
-        # 2. Calculate the final timeout
+        # 3. Calculate the final timeout
         timeout = kwargs.pop('timeout', self.default_timeout)
 
-        # 3. Instantiate the Agent
+        # 4. Instantiate the Agent
         if agent_type == 'SearchPaperAgent':
             return SearchPaperAgent(
                 llm=target_llm, 
@@ -61,10 +63,6 @@ class AgentFactory:
             )
             
         elif agent_type == 'NewsAgent':
-            # Explicitly extract the tool_manager from kwargs if it exists
-            # This ensures we don't accidentally pass legacy mcp_client references
-            tool_mgr = kwargs.pop('tool_manager', None)
-            
             return NewsAgent(
                 llm=target_llm,
                 tool_manager=tool_mgr,

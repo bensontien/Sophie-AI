@@ -4,9 +4,8 @@ from core.state import AgentState
 from core.prompt_loader import PromptLoader
 
 class GenericAgent(Workflow):
-    # ✨ 1. 在初始化參數中加入 timeout，並給予一個極大的預設值（例如 3600 秒 = 1小時）
     def __init__(self, llm, tool_manager=None, required_category: str = None, system_prompt: str = "", task_id: int = 0, timeout: float = 3600.0, **kwargs):
-        # ✨ 2. 將 timeout 傳遞給父類別 Workflow，徹底解除 45 秒的限制
+        # Set a large timeout to override default Workflow limits
         super().__init__(timeout=timeout, **kwargs)
         self.llm = llm
         self.tool_manager = tool_manager
@@ -38,12 +37,12 @@ class GenericAgent(Workflow):
                 if past_task_id < self.task_id:
                     accumulated_context += f"\n--- [Result from Step {past_task_id}] ---\n{past_result}\n"
 
-        # 3. Load Skill Details (動態讀取分類守則)
+        # 3. Load Skill Details (dynamically read category rules)
         skill_details = "No specific rules provided for this category."
         if self.required_category:
             skill_details = PromptLoader.load_skill_details(self.required_category)
 
-        # 4. Decision Prompt (動態讀取 Markdown 並注入 skill_details)
+        # 4. Decision Prompt (inject skill_details into template)
         decision_prompt_template = PromptLoader.load_agent_prompt("generic_agent_decision")
         decision_prompt = decision_prompt_template.format(
             system_prompt=self.system_prompt,
@@ -76,7 +75,7 @@ class GenericAgent(Workflow):
                 tool_result = await self.tool_manager.execute(tool_name, **tool_args)
                 print("[GenericAgent] Tool execution complete, summarizing...")
                 
-                # 6. Summary Prompt (動態讀取 Markdown)
+                # 6. Summary Prompt (load from Markdown)
                 summary_prompt_template = PromptLoader.load_agent_prompt("generic_agent_summary")
                 summary_prompt = summary_prompt_template.format(
                     tool_name=tool_name,
