@@ -8,38 +8,7 @@ The system features a clean separation between the "Brain" (LLM reasoning and pl
 
 ## 🏗 System Architecture
 
-```mermaid
-graph TD
-    User([User]) <-->|WebSocket / JSON| API[FastAPI Server]
-    
-    subgraph RayCluster [Ray Parallel Runtime]
-        API <--> Orchestrator[Sophie Orchestrator]
-        Orchestrator -->|1. Planning| Planner[LLM Planner]
-        Orchestrator -->|2. Parallel Dispatch| TaskDistributor{Task Distributor}
-        
-        TaskDistributor -->|Task A| AgentActor1[SearchPaperAgent Actor]
-        TaskDistributor -->|Task B| AgentActor2[NewsAgent Actor]
-        TaskDistributor -->|Task C| GenericActor[GenericAgent Actor]
-        
-        AgentActor1 & AgentActor2 & GenericActor <-->|Tool Request| ToolProxy[RayToolManagerProxy]
-    end
-    
-    subgraph Muscle [Tool System - The Muscle]
-        ToolProxy <--> ToolActor[ToolManagerActor]
-        ToolActor <-->|MCP Protocol| MCPServer[MCP Tool Server]
-        ToolActor <-->|Subprocess| CLI[CLI / PowerShell]
-    end
-    
-    subgraph Brain [Intelligence - The Brain]
-        Orchestrator <-->|Hot Load| Prompts[.sophie/ Markdown Prompts]
-        Orchestrator <-->|RAG / State| Memory[MemoryManager]
-        GenericActor -->|Disclosure| SkillCatalog[Skill Catalog]
-    end
-
-    style RayCluster fill:#f9f,stroke:#333,stroke-width:2px
-    style Muscle fill:#bbf,stroke:#333,stroke-width:2px
-    style Brain fill:#dfd,stroke:#333,stroke-width:2px
-```
+![System Architecture](AC.png)
 
 ### Key Architectural Pillars
 -   **Ray-Powered Parallelism**: The orchestrator decomposes complex user queries into independent tasks that are executed concurrently across a Ray cluster, significantly reducing latency.
