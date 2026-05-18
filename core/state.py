@@ -33,6 +33,9 @@ class AgentState(BaseModel):
     
     memory_context: str = ""
     
+    available_agents: str = ""
+    available_tools: str = ""
+    
     plan: Optional[Plan] = None
     search_report_content: Optional[str] = None
     search_report_file: Optional[str] = None

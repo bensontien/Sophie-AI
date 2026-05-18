@@ -74,6 +74,7 @@ class AgentFactory:
         elif agent_type == 'ChatAgent':
             return ChatAgent(
                 llm=target_llm, 
+                tool_manager=tool_mgr,
                 timeout=timeout, 
                 verbose=True, 
                 **kwargs

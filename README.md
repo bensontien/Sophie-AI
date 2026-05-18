@@ -8,10 +8,64 @@ The system features a clean separation between the "Brain" (LLM reasoning and pl
 
 ## 🏗 System Architecture
 
-![System Architecture](AC.png)
+```mermaid
+graph TD
+    subgraph Frontend [Sophie UI - React]
+        UI[Instant Output Engine]
+    end
+
+    subgraph Backend [FastAPI Server]
+        Life[Lifespan Manager]
+        WS[WebSocket Endpoint]
+        Life -- 1. Trigger Warm-up --> Orch
+    end
+
+    subgraph Core [Logic & State]
+        Orch[Sophie Orchestrator]
+        Reg[Node Registry]
+        State[Agent State - Capability Aware]
+        Conv[Chinese Converter - OpenCC]
+        Mem[Memory Manager]
+        
+        Orch -- 2. Register Nodes --> Reg
+        Orch -- 5. Post-process Results --> Conv
+    end
+
+    subgraph RayCluster [Ray Parallel Compute]
+        subgraph Actors [Parallel Agent Actors]
+            direction TB
+            AA_Chat[ChatAgentActor]
+            AA_News[NewsAgentActor]
+            AA_Paper[SearchPaperActor]
+            AA_Trans[TranslatorActor]
+            AA_Gen[GenericAgentActor]
+        end
+
+        subgraph Managers [Management Actors]
+            TM[ToolManagerActor]
+        end
+    end
+
+    subgraph Integration [External Tools & MCP]
+        MCP[MCP Server - SophieTools]
+        CLI[Windows PowerShell]
+        TM -- Controls --> MCP
+        TM -- Executes --> CLI
+    end
+
+    %% Interaction Flows
+    UI -- User Input --> WS
+    WS -- Dispatch --> Orch
+    Orch -- 3. Plan & Fetch Capability --> State
+    Orch -- 4. Parallel Execute --> Actors
+    Actors -- Call Tools --> TM
+    Orch -- 6. Return Traditional Text --> WS
+    WS -- Response --> UI
+```
 
 ### Key Architectural Pillars
 -   **Ray-Powered Parallelism**: The orchestrator decomposes complex user queries into independent tasks that are executed concurrently across a Ray cluster, significantly reducing latency.
+-   **Eager Initialization (Warm-up)**: Actors are pre-initialized during server startup, eliminating first-request latency.
 -   **Dual-Track Routing**: 
     -   **Specialized Agents**: High-efficiency workflows for specific domains (Academic Papers, News, Translation).
     -   **Generic Agents**: Dynamic, on-the-fly agents generated for long-tail tasks using **Progressive Tool Disclosure**.
@@ -23,10 +77,12 @@ The system features a clean separation between the "Brain" (LLM reasoning and pl
 ## 🌟 Core Features
 
 -   **Autonomous Planning**: Uses a high-level LLM planner to break down complex goals into a dependency-aware execution graph.
+-   **Capability Discovery**: The system dynamically injects available tools and agents into the state, allowing agents (like ChatAgent) to accurately describe Sophie's capabilities to the user.
 -   **MCP Standardized Tools**: Full support for Model Context Protocol, allowing Sophie to use any MCP-compliant tool server.
 -   **Progressive Tool Disclosure**: Instead of overloading the context with all tools, agents dynamically request "Skill Categories," keeping the context window clean and reducing hallucinations.
+-   **Automatic Traditional Chinese Conversion**: Integrates OpenCC to automatically convert all Simplified Chinese outputs to Traditional Chinese without affecting other languages.
 -   **Hybrid LLM Engine**: Seamlessly switch between local vLLM (for privacy/cost) and OpenRouter (for state-of-the-art reasoning).
--   **Real-time Streaming**: Full WebSocket support for interactive, low-latency communication with the frontend.
+-   **Instant Output UI**: The React frontend uses a direct-render approach via WebSockets for immediate display of complex responses, including secondary cards and markdown.
 
 ---
 
@@ -42,22 +98,25 @@ Agents/
 │   ├── searchpaper_agent.py# Academic paper search (OpenAlex/Semantic Scholar)
 │   ├── news_agent.py       # Real-time news analysis & reporting
 │   ├── translator_agent.py # High-precision PDF translation workflow
+│   ├── chat_agent.py       # Conversational and capability-aware agent
 │   └── generic_agent.py    # Dynamic agent for custom tasks
 │
 ├── core/                   # Kernel Layer
-│   ├── orchestrator.py     # Parallel task scheduler & Ray manager
+│   ├── orchestrator.py     # Parallel task scheduler, pre-warms actors, handles text conversion
 │   ├── ray_manager.py      # Ray Actor definitions & Proxy logic
 │   ├── tool_manager.py     # Skill category & tool registry
 │   ├── mcp_client.py       # MCP protocol implementation
+│   ├── state.py            # Agent state, including capability discovery
+│   ├── utils.py            # Utility functions (e.g., OpenCC Chinese Converter)
 │   └── memory.py           # Context-aware conversation memory
 │
 ├── factorys/               # Abstraction Layer
 │   ├── agent_factory.py    # Factory for instantiating Ray Actors/Agents
 │   └── model_factory.py    # Unified interface for LLM providers
 │
-├── sophie-ui/              # Frontend (React + Vite + Tailwind)
+├── sophie-ui/              # Frontend (React + Vite + Markdown Support)
 │
-├── server.py               # Main API Gateway (FastAPI)
+├── server.py               # Main API Gateway (FastAPI) & Lifespan Manager
 ├── tools_server.py         # MCP Tool Server (Muscle)
 └── config.py               # Environment & System configuration
 ```

@@ -57,6 +57,9 @@ class ToolManagerActor:
 
     def get_all_schemas(self):
         return self.tool_manager.get_all_schemas()
+
+    def get_all_tool_descriptions(self):
+        return self.tool_manager.get_all_tool_descriptions()
         
     async def stop(self):
         print("[ToolManagerActor] Stopping MCP Client...")
@@ -71,6 +74,10 @@ class FunctionActor:
     def __init__(self, name: str, func: Any):
         self.name = name
         self.func = func
+        
+    async def initialize(self):
+        """Dummy initialization for parallel compatibility."""
+        return True
         
     async def run(self, state: AgentState) -> AgentState:
         print(f"[Ray Actor: {self.name}] Executing function wrapper...")
@@ -93,7 +100,8 @@ class AgentActor:
         self._factory = None
         self.tool_manager_actor = tool_manager_actor # Reference to ToolManager Actor
 
-    async def run(self, state: AgentState) -> AgentState:
+    async def initialize(self):
+        """Eagerly initialize the Agent instance."""
         if self.agent is None:
             print(f"[Ray Actor: {self.agent_type}] Initializing Agent instance...")
             if self._factory is None:
@@ -105,6 +113,11 @@ class AgentActor:
                 llm_type=self.llm_type,
                 tool_manager=RayToolManagerProxy(self.tool_manager_actor) if self.tool_manager_actor else None
             )
+        return True
+
+    async def run(self, state: AgentState) -> AgentState:
+        if self.agent is None:
+            await self.initialize()
         
         print(f"[Ray Actor: {self.agent_type}] Executing task...")
         try:
@@ -125,6 +138,10 @@ class GenericAgentActor:
         self.llm_type = llm_type
         self.tool_manager_actor = tool_manager_actor
         self._factory = None
+
+    async def initialize(self):
+        """Dummy initialization for parallel compatibility."""
+        return True
 
     async def run(self, state: AgentState, task_dict: dict) -> AgentState:
         from agents.generic_agent import GenericAgent
@@ -161,6 +178,9 @@ class RayToolManagerProxy:
 
     def get_all_schemas(self):
         return ray.get(self.actor_handle.get_all_schemas.remote())
+
+    def get_all_tool_descriptions(self):
+        return ray.get(self.actor_handle.get_all_tool_descriptions.remote())
 
 def merge_states(base_state: AgentState, *new_states: AgentState) -> AgentState:
     for s in new_states:

@@ -3,45 +3,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm'; // Import GFM plugin to support tables and advanced syntax
 import './App.css';
 
-const TypewriterText = ({ text, speed = 30, onTyping, isNew, onComplete }) => {
-  const [displayedText, setDisplayedText] = useState(isNew ? '' : text);
-
-  useEffect(() => {
-    if (!isNew || !text) {
-      setDisplayedText(text || '');
-      return;
-    }
-
-    let i = 0;
-    setDisplayedText(''); 
-    
-    const timer = setInterval(() => {
-      setDisplayedText(text.substring(0, i + 1));
-      i++;
-      
-      if (onTyping) onTyping();
-
-      if (i >= text.length) {
-        clearInterval(timer);
-        if (onComplete) onComplete();
-      }
-    }, speed);
-
-    return () => clearInterval(timer);
-  }, [text, speed, isNew]);
-
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]} // Apply GFM plugin
-      components={{
-        a: ({node, ...props}) => <a {...props} target="_blank" rel="noopener noreferrer" />
-      }}
-    >
-      {displayedText}
-    </ReactMarkdown>
-  );
-};
-
 function App() {
   const [sessions, setSessions] = useState([
     { id: Date.now().toString(), title: "新對話", messages: [] }
@@ -104,7 +65,7 @@ function App() {
         } 
         else if (data.type === 'result') {
           const filteredMessages = prevMessages.filter(msg => msg.type !== 'status');
-          return { ...session, messages: [...filteredMessages, { role: 'assistant', type: 'result', data: data, isNew: true }] };
+          return { ...session, messages: [...filteredMessages, { role: 'assistant', type: 'result', data: data }] };
         } 
         else if (data.type === 'error') {
           const filteredMessages = prevMessages.filter(msg => msg.type !== 'status');
@@ -145,18 +106,6 @@ function App() {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  };
-
-  const handleTypingComplete = (sessionId, msgIndex) => {
-    setSessions((prevSessions) => prevSessions.map(session => {
-      if (session.id !== sessionId) return session;
-      
-      const newMessages = [...session.messages];
-      if (newMessages[msgIndex]) {
-        newMessages[msgIndex] = { ...newMessages[msgIndex], isNew: false };
-      }
-      return { ...session, messages: newMessages };
-    }));
   };
 
   const handleKeyPress = (e) => {
@@ -246,60 +195,58 @@ function App() {
                       
                       {msg.data.reply && (
                         <div className="text-reply markdown-content">
-                          <TypewriterText 
-                            text={msg.data.reply} 
-                            speed={5} 
-                            isNew={msg.isNew} 
-                            onTyping={scrollToBottom} 
-                            onComplete={() => handleTypingComplete(activeSessionId, index)} 
-                          />
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              a: ({node, ...props}) => <a {...props} target="_blank" rel="noopener noreferrer" />
+                            }}
+                          >
+                            {msg.data.reply}
+                          </ReactMarkdown>
                         </div>
                       )}
 
-                      {/* Only render secondary cards if there is no text reply OR the typewriter has finished */}
-                      {(!msg.isNew || !msg.data.reply) && (
-                        <>
-                          {msg.data.news_report && (
-                            <div className="card news-card">
-                              <h3>📰 新聞趨勢報告</h3>
-                              <div className="markdown-content">
+                      <div className="cards-wrapper">
+                        {msg.data.news_report && (
+                          <div className="card news-card">
+                            <h3>📰 新聞趨勢報告</h3>
+                            <div className="markdown-content">
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                  a: ({node, ...props}) => <a {...props} target="_blank" rel="noopener noreferrer" />
+                                }}
+                              >
+                                {msg.data.news_report}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        )}
+                        {msg.data.search_report_file && (
+                          <div className="card file-card">
+                            <h3>📄 論文摘要已生成</h3>
+                            <button className="file-path-btn">摘要儲存位置: <code>{msg.data.search_report_file}</code></button>
+                            {msg.data.search_report_content && (
+                              <div className="markdown-content" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
                                 <ReactMarkdown
                                   remarkPlugins={[remarkGfm]}
                                   components={{
                                     a: ({node, ...props}) => <a {...props} target="_blank" rel="noopener noreferrer" />
                                   }}
                                 >
-                                  {msg.data.news_report}
+                                  {msg.data.search_report_content}
                                 </ReactMarkdown>
                               </div>
-                            </div>
-                          )}
-                          {msg.data.search_report_file && (
-                            <div className="card file-card">
-                              <h3>📄 論文摘要已生成</h3>
-                              <button className="file-path-btn">摘要儲存位置: <code>{msg.data.search_report_file}</code></button>
-                              {msg.data.search_report_content && (
-                                <div className="markdown-content" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
-                                  <ReactMarkdown
-                                    remarkPlugins={[remarkGfm]}
-                                    components={{
-                                      a: ({node, ...props}) => <a {...props} target="_blank" rel="noopener noreferrer" />
-                                    }}
-                                  >
-                                    {msg.data.search_report_content}
-                                  </ReactMarkdown>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {msg.data.translated_file && (
-                            <div className="card file-card success">
-                              <h3>📚 翻譯完成</h3>
-                              <button className="file-path-btn success">打開翻譯: <code>{msg.data.translated_file}</code></button>
-                            </div>
-                          )}
-                        </>
-                      )}
+                            )}
+                          </div>
+                        )}
+                        {msg.data.translated_file && (
+                          <div className="card file-card success">
+                            <h3>📚 翻譯完成</h3>
+                            <button className="file-path-btn success">打開翻譯: <code>{msg.data.translated_file}</code></button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

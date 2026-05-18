@@ -18,7 +18,7 @@ PLANNING RULES:
 2. If the step requires custom actions using tools, and no Specialized Agent handles it, set `assigned_node` to "GenericAgent". 
 3. [IMPORTANT]: If the user provides a SPECIFIC URL to read or extract data from, you MUST use "GenericAgent" and assign the appropriate `required_category`.
 4. When using "GenericAgent", you MUST specify the broad category in `required_category`, NOT the specific tool names, and write a strict instruction in `role_prompt`.
-5. General chat goes to ChatAgent.
+5. General chat or questions about what Sophie can do goes to ChatAgent. ChatAgent has access to the full list of tools and agents to describe them.
 
 Please output strictly in JSON format:
 {{

@@ -25,3 +25,4 @@ fastmcp
 numpy==2.0.0
 vllm
 huggingface-hub
+opencc-python-reimplemented

@@ -148,6 +148,12 @@ class ToolManager:
     def get_tool_names(self) -> list[str]:
         return list(self._tools.keys())
 
+    def get_all_tool_descriptions(self) -> str:
+        """Returns a list of all tools and their descriptions."""
+        if not self._tools:
+            return "No tools registered."
+        return "\n".join([f"- {t.name}: {t.description}" for t in self._tools.values()])
+
     async def execute(self, tool_name: str, **kwargs) -> str:
         """Unified entry point for tool execution."""
         if tool_name not in self._tools:

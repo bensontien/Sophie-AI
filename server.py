@@ -102,6 +102,11 @@ async def lifespan(app: FastAPI):
         tool_manager=tool_manager_proxy,
         tool_manager_actor=tool_manager_actor
     )
+    
+    # --- Warm up Ray Actors ---
+    print("[Server] Warming up parallel agents...")
+    await sophie_orchestrator.warm_up()
+    
     print("[Server] Sophie 2.0 API startup complete with Ray Parallel Support!")
     
     # --- Yield control back to FastAPI ---

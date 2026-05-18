@@ -51,13 +51,37 @@ class SophieOrchestrator:
             tool_manager_actor=self.tool_manager_actor
         )
 
+    async def warm_up(self):
+        """Warms up all initialized Ray Actors."""
+        print("[Orchestrator] Warming up Ray Actors...")
+        init_tasks = []
+        
+        # We now call initialize on ALL actors since we added dummy methods
+        for name, actor in self.actors.items():
+            try:
+                init_tasks.append(actor.initialize.remote())
+            except Exception as e:
+                print(f"[Orchestrator] Warning: Failed to trigger init for {name}: {e}")
+        
+        if init_tasks:
+            # Gather results to ensure they all complete
+            await asyncio.gather(*[asyncio.wrap_future(t.to_task()) if hasattr(t, 'to_task') else t for t in init_tasks], return_exceptions=True)
+            print(f"[Orchestrator] {len(init_tasks)} Ray Actors warmed up.")
+
     async def _generate_plan(self, user_prompt: str, memory_context: str = "") -> Plan:
         specialized_agents_desc = self.registry.get_all_descriptions()
         
-        # Fetch the skill catalog instead of all tool schemas
+        # Fetch the skill catalog + specific tool descriptions
         available_skills_desc = "None currently available."
         if self.tool_manager:
-            available_skills_desc = PromptLoader.load_skill_catalog()
+            static_catalog = PromptLoader.load_skill_catalog()
+            try:
+                # Use Ray Proxy to get dynamic tool list
+                dynamic_tools = self.tool_manager.get_all_tool_descriptions()
+                available_skills_desc = f"{static_catalog}\n\n[Specific Tools Currently Registered]:\n{dynamic_tools}"
+            except Exception as e:
+                print(f"[Orchestrator] Warning: Could not fetch dynamic tool descriptions: {e}")
+                available_skills_desc = static_catalog
 
         # Load the base orchestrator prompt from the Markdown file
         base_prompt_template = PromptLoader.load_agent_prompt("orchestrator")
@@ -90,6 +114,14 @@ class SophieOrchestrator:
         state = AgentState(user_topic=user_prompt, search_source=search_source)
         state.memory_context = memory_context
         os.makedirs("Papers", exist_ok=True)
+        
+        # Populate capability info for agents to use
+        state.available_agents = self.registry.get_all_descriptions()
+        if self.tool_manager:
+            try:
+                state.available_tools = self.tool_manager.get_all_tool_descriptions()
+            except Exception as e:
+                print(f"[Orchestrator] Warning: Could not fetch tool descriptions: {e}")
         
         state.plan = await self._generate_plan(user_prompt, memory_context)
         
@@ -160,6 +192,18 @@ class SophieOrchestrator:
             await asyncio.sleep(0.1)
 
         state.current_phase = "finished"
+        
+        # --- Final Post-processing: Convert Simplified Chinese to Traditional Chinese ---
+        from core.utils import converter
+        if state.chat_reply:
+            state.chat_reply = converter.to_traditional(state.chat_reply)
+        if state.news_report:
+            state.news_report = converter.to_traditional(state.news_report)
+        if state.search_report_content:
+            state.search_report_content = converter.to_traditional(state.search_report_content)
+        if state.step_results:
+            state.step_results = {k: converter.to_traditional(v) for k, v in state.step_results.items()}
+            
         print("\n[Orchestrator] Plan execution completed!")
         return state
 
